@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  # PostgreSQL for Next.js app (user/auth data)
+  postgres:
+    image: postgres:16-alpine
+    container_name: levelpro_postgres
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: levelpro
+      POSTGRES_PASSWORD: levelpro_secret
+      POSTGRES_DB: levelpro
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U levelpro"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL for Drupal CMS
+  drupal_db:
+    image: postgres:16-alpine
+    container_name: levelpro_drupal_db
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: drupal
+      POSTGRES_PASSWORD: drupal_secret
+      POSTGRES_DB: drupal
+    volumes:
+      - drupal_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U drupal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Drupal 10 Headless CMS
+  drupal:
+    image: drupal:10-apache
+    container_name: levelpro_drupal
+    restart: unless-stopped
+    ports:
+      - "8888:80"
+    depends_on:
+      drupal_db:
+        condition: service_healthy
+    environment:
+      DRUPAL_DB_HOST: drupal_db
+      DRUPAL_DB_PORT: "5432"
+      DRUPAL_DB_USER: drupal
+      DRUPAL_DB_PASSWORD: drupal_secret
+      DRUPAL_DB_NAME: drupal
+      DRUPAL_DB_DRIVER: pgsql
+    volumes:
+      - drupal_modules:/var/www/html/modules
+      - drupal_profiles:/var/www/html/profiles
+      - drupal_themes:/var/www/html/themes
+      - drupal_sites:/var/www/html/sites
+
+  # Adminer — lightweight database UI
+  adminer:
+    image: adminer:latest
+    container_name: levelpro_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - drupal_db
+
+volumes:
+  postgres_data:
+  drupal_db_data:
+  drupal_modules:
+  drupal_profiles:
+  drupal_themes:
+  drupal_sites:
