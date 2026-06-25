@@ -8,18 +8,26 @@ const globalForPrisma = globalThis as unknown as {
 
 const databaseUrl = process.env.DATABASE_URL;
 
-if (!databaseUrl) {
+function missingDatabaseUrl(): never {
   throw new Error("DATABASE_URL is required.");
 }
 
-const pool = new Pool({ connectionString: databaseUrl });
-const adapter = new PrismaPg(pool);
+const prismaFallback = new Proxy({} as PrismaClient, {
+  get() {
+    return missingDatabaseUrl();
+  },
+});
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["query"] : [],
-  });
+const prismaClient = databaseUrl
+  ? globalForPrisma.prisma ??
+    new PrismaClient({
+      adapter: new PrismaPg(new Pool({ connectionString: databaseUrl })),
+      log: process.env.NODE_ENV === "development" ? ["query"] : [],
+    })
+  : prismaFallback;
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+export const prisma = prismaClient;
+
+if (databaseUrl && process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prismaClient;
+}
